@@ -1,0 +1,328 @@
+package Parse;
+
+action code {: static Symbol.Symbol sym(String s) {
+	         return Symbol.Symbol.symbol(s);
+	        }
+	    :};
+
+parser code  {: 
+  Lexer lexer;
+
+  public void syntax_error(java_cup.runtime.Symbol current) {
+   report_error("Syntax error (" + current.sym + ")", current);
+  }
+
+  ErrorMsg.ErrorMsg errorMsg;
+
+  public void report_error(String message, java_cup.runtime.Symbol info) {
+      errorMsg.error(info.left, message);
+  }
+
+  public Grm(Lexer l, ErrorMsg.ErrorMsg err) {
+    this();
+    errorMsg=err;
+    lexer=l;
+  }
+:};
+
+
+scan with {: return lexer.nextToken(); :};
+
+terminal String ID, STRING_LITERAL;
+terminal Integer DECIMAL_LITERAL;
+terminal char CHAR_LITERAL;
+terminal INT, COMMA, COLON, SEMICOLON, LPAREN, RPAREN, LBRACK, RBRACK,
+
+	LBRACE, RBRACE, PLUS, MINUS, TIMES, DIVIDE, EQ, NEQ, LT, LE,
+	GT, GE, AND, OR, ASSIGN, IF, ELSE, WHILE, FOR,
+	DO, BREAK, FUN, VAR, VOLATILE,
+    REGISTER, CONTINUE, TYPEDEF,
+    STRUCT, STATIC, SIZEOF, RETURN, EXTERN, DOUBLE,
+    UNION, SHORT, FLOAT,  VOID, LONG, GOTO, ENUM,
+    CHAR, AUTO, RSHIFTASSIGN, LSHIFTASSIGN, ELIPSES, BWISEORASSIGN,
+    BWISEXORASSIGN, RSHIFT, LSHIFT, DIVASSIGN, ARROW, SUBASSIGN, DECREMENT,
+    ADDASSIGN, INCREMENT, MULASSIGN, BWISEANDASSIGN, MODASSIGN, TILDE,
+    BWISEOR, BWISEXOR, PERIOD, BITWISEAND,
+    MODULUS, NOT, SWITCH, CASE, DEFAULT;
+terminal QUESTION;
+terminal Integer CONST;
+
+
+non terminal Absyn.Exp Exp, CastExpression,
+                   Expression,  /* will map to Absyn.ExpList */
+                   Expresson;
+non terminal Absyn.ExpList ArgumentExpressionList;
+non terminal UnaryOperator;
+non terminal Absyn.Var Var;
+
+
+non terminal Absyn.StmList LabeledStatementList; /* if needed */
+
+non terminal Absyn.TypeName                TypeName;
+non terminal Absyn.Exp             AssignmentExpression;
+non terminal Absyn.Exp              ConditionalExpression;
+non terminal Absyn.Exp                  LogicalOrExpression;
+non terminal Absyn.Exp                 LogicalAndExpression;
+non terminal Absyn.Exp                 InclusiveOrExpression, ExclusiveOrExpression, AndExpression,
+                                           EqualityExpression, RelationalExpression,
+                                           ShiftExpression, AdditiveExpression, MultiplicativeExpression;
+non terminal Absyn.Exp               UnaryExpression;
+non terminal Integer                       AssignmentOperator;
+non terminal Absyn.Exp                     PostfixExpression, PrimaryExpression;
+non terminal String                        Identifier;
+non terminal Unary_Operator;
+non terminal Cast_Expression;
+non terminal Absyn.Exp                 Constant;
+
+non terminal Absyn.Stm          Statement;
+non terminal Absyn.Stm          LabeledStatement;
+non terminal Absyn.Stm          CompoundStatement;
+non terminal Absyn.Stm          ExpressionStatement;
+non terminal Absyn.Stm          SelectionStatement;
+non terminal Absyn.Stm          IterationStatement;
+non terminal Absyn.Stm          JumpStatement;
+non terminal Absyn.StmList      StatementList;
+non terminal Absyn.DecList      DeclarationList;
+non terminal Absyn.Dec          Declaration;
+non terminal Absyn.OptEXPP      OptExp;
+
+
+
+precedence right ASSIGN, ADDASSIGN, SUBASSIGN, MULASSIGN, DIVASSIGN, MODASSIGN,
+                 BWISEANDASSIGN, BWISEXORASSIGN, LSHIFTASSIGN, RSHIFTASSIGN;
+
+precedence right QUESTION;   // ternary ?: right-associative
+
+precedence left OR;           // logical OR
+precedence left AND;          // logical AND
+precedence left BWISEOR;      // |
+precedence left BWISEXOR;     // ^
+precedence left BITWISEAND;   // &
+precedence left EQ, NEQ;      // ==, !=
+precedence left LT, LE, GT, GE; // <, <=, >, >=
+precedence left LSHIFT, RSHIFT; // <<, >>
+precedence left PLUS, MINUS;   // +, -
+precedence left TIMES, DIVIDE, MODULUS; // *, /, %
+precedence left COMMA;
+
+
+
+
+
+
+       
+
+
+start with Expression;
+
+
+Exp ::= error:e
+	  {: RESULT = new Absyn.SeqExp(eleft, null); :}
+	| Var:v
+	  {: RESULT = new Absyn.VarExp(vleft, v); :}
+	;
+
+Var ::=   ID:n
+	  {: RESULT = new Absyn.SimpleVar(nleft, sym(n)); :}
+	;
+
+
+
+PrimaryExpression ::= ID:id
+                            {: RESULT = new Absyn.VarExp(0, new Absyn.SimpleVar(0, sym(id))); :}
+                        | Constant:c
+                            {: RESULT = c; :}
+                        | STRING_LITERAL:s
+                            {: RESULT = new Absyn.StringExp(0, s); :}
+                        | LPAREN Expression:e RPAREN
+                            {: RESULT = e; :}
+                      ;
+
+Constant ::=
+    DECIMAL_LITERAL:d
+      {: RESULT = new Absyn.IntConstExp(0, d); :}
+  | CHAR_LITERAL:c
+      {: RESULT = new Absyn.CharConstExp(0, c); :}
+    ;
+
+PostfixExpression ::=  PrimaryExpression:e
+                          {: RESULT = e; :}
+                      | PostfixExpression:e1 LBRACK Expression:e2 RBRACK
+                          {: RESULT = new Absyn.ArrayAccessExp(e1left, e1, e2); :}
+                      | PostfixExpression:e1 LPAREN ArgumentExpressionList:args RPAREN
+                        {: RESULT = new Absyn.CallExp(e1left, e1, args); :}
+                      | PostfixExpression:e1 PERIOD ID:id
+                        {: RESULT = new Absyn.FieldAccessExp(e1left, e1, id); :}
+                      | PostfixExpression:e1 ARROW ID:id
+                        {: RESULT = new Absyn.PointerAccessExp(e1left, e1, id); :}
+                      | PostfixExpression:e INCREMENT
+                        {: RESULT = new Absyn.UnaryOpExp(eleft, Absyn.UnaryOpExp.POSTINC, e); :}
+                      | PostfixExpression:e DECREMENT
+                        {: RESULT = new Absyn.UnaryOpExp(eleft, Absyn.UnaryOpExp.POSTDEC, e); :}
+                      ;
+
+ArgumentExpressionList ::=
+      AssignmentExpression:e
+        {: RESULT = new Absyn.ExpList(e, null); :}
+  | ArgumentExpressionList:rest COMMA AssignmentExpression:e
+        {:
+          // Safely append the new argument to the existing list
+          if (rest == null) {
+              RESULT = new Absyn.ExpList(e, null);
+          } else {
+              Absyn.ExpList tail = rest;
+              while (tail.tail != null) tail = tail.tail;
+              tail.tail = new Absyn.ExpList(e, null);
+              RESULT = rest;
+          }
+        :}
+;
+
+
+UnaryExpression ::=  PostfixExpression:e
+                        {: RESULT = e; :}
+                    | INCREMENT UnaryExpression:e
+                        {: RESULT = new Absyn.UnaryOpExp(eleft, Absyn.UnaryOpExp.PREINC, e); :}
+                    | DECREMENT UnaryExpression:e
+                        {: RESULT = new Absyn.UnaryOpExp(eleft, Absyn.UnaryOpExp.PREDEC, e); :}
+                    | UnaryOperator:op CastExpression:e
+                        {: RESULT = new Absyn.UnaryOpExp(eleft, (int)op, e); :}
+                    | SIZEOF UnaryExpression:e
+                        {: RESULT = new Absyn.SizeofExp(e); :}
+                    | SIZEOF LPAREN TypeName:t RPAREN
+                        {: RESULT = new Absyn.SizeofTypeExp(t); :}
+                    ;
+
+UnaryOperator ::=  BITWISEAND {: RESULT = Absyn.UnaryOpExp.BITWISEAND; :}
+                  | TIMES      {: RESULT = Absyn.UnaryOpExp.TIMES; :}
+                  | PLUS       {: RESULT = Absyn.UnaryOpExp.PLUS; :}
+                  | MINUS      {: RESULT = Absyn.UnaryOpExp.MINUS; :}
+                  | TILDE      {: RESULT = Absyn.UnaryOpExp.TILDE; :}
+                  | NOT        {: RESULT = Absyn.UnaryOpExp.NOT; :}
+                  ;
+
+
+CastExpression ::=   UnaryExpression:e
+                        {: RESULT = e; :}
+                      | LPAREN TypeName:t RPAREN CastExpression:e
+                        {: RESULT = new Absyn.CastExp(eleft, t, e); :}
+                      ;
+                
+MultiplicativeExpression ::= CastExpression:e
+                                  {: RESULT = e; :}
+                              | MultiplicativeExpression:e1 TIMES CastExpression:e2
+                                  {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.TIMES, e1, e2); :}
+                              | MultiplicativeExpression:e1 DIVIDE CastExpression:e2
+                                  {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.DIVIDE, e1, e2); :}
+                              | MultiplicativeExpression:e1 MODULUS CastExpression:e2
+                                  {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.MODULUS, e1, e2); :}
+                              ;
+
+AdditiveExpression ::= MultiplicativeExpression:e
+                          {: RESULT = e; :}
+                      | AdditiveExpression:e1 PLUS MultiplicativeExpression:e2
+                          {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.PLUS, e1, e2); :}
+                      | AdditiveExpression:e1 MINUS MultiplicativeExpression:e2
+                          {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.MINUS, e1, e2); :}
+                      ;
+
+ShiftExpression ::=  AdditiveExpression:e
+                          {: RESULT = e; :}
+                      | ShiftExpression:e1 LSHIFT AdditiveExpression:e2
+                          {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.LSHIFT, e1, e2); :}
+                      | ShiftExpression:e1 RSHIFT AdditiveExpression:e2
+                          {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.RSHIFT, e1, e2); :}
+                      ;
+                      
+RelationalExpression ::= ShiftExpression:e
+                              {: RESULT = e; :}
+                          | RelationalExpression:e1 LT ShiftExpression:e2
+                              {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.LT, e1, e2); :}
+                          | RelationalExpression:e1 GT ShiftExpression:e2
+                              {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.GT, e1, e2); :}
+                          | RelationalExpression:e1 LE ShiftExpression:e2
+                              {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.LEQ, e1, e2); :}
+                          | RelationalExpression:e1 GE ShiftExpression:e2
+                              {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.GEQ, e1, e2); :}
+                          ;
+
+EqualityExpression ::=   RelationalExpression:e
+                              {: RESULT = e; :}
+                          | EqualityExpression:e1 EQ RelationalExpression:e2
+                              {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.EQ, e1, e2); :}
+                          | EqualityExpression:e1 NEQ RelationalExpression:e2
+                              {: RESULT = new Absyn.BinOpExp(e1left, Absyn.BinOpExp.NEQ, e1, e2); :}
+                          ;
+
+AndExpression ::= EqualityExpression:e
+                      {: RESULT = e; :}
+                  | AndExpression:e1 BITWISEAND EqualityExpression:e2
+                      {: RESULT = new Absyn.OpExpA(e1left, Absyn.OpExpA.BITAND, e1, e2); :}
+                  ;
+
+ExclusiveOrExpression ::= AndExpression:e
+                              {: RESULT = e; :}
+                          | ExclusiveOrExpression:e1 BWISEXOR AndExpression:e2
+                              {: RESULT = new Absyn.OpExpA(e1left, Absyn.OpExpA.BITXOR, e1, e2); :}
+                          ;
+                    
+InclusiveOrExpression ::= ExclusiveOrExpression:e
+                              {: RESULT = e; :}
+                          | InclusiveOrExpression:e1 BWISEOR ExclusiveOrExpression:e2
+                              {: RESULT = new Absyn.OpExpA(e1left, Absyn.OpExpA.BITOR, e1, e2); :}
+                          ;
+                      
+LogicalAndExpression ::= InclusiveOrExpression:e
+                              {: RESULT = e; :}
+                          | LogicalAndExpression:e1 AND InclusiveOrExpression:e2
+                              {: RESULT = new Absyn.AndExpA(e1left, e1, e2); :}
+                          ;
+
+LogicalOrExpression ::= LogicalAndExpression:e
+                              {: RESULT = e; :}
+                        | LogicalOrExpression:e1 OR LogicalAndExpression:e2
+                              {: RESULT = new Absyn.OrExpA(e1left, e1, e2); :}
+                        ;
+
+ConditionalExpression ::= LogicalOrExpression:e
+                              {: RESULT = e; :}
+                          | LogicalOrExpression:e1 QUESTION Expression:e2 COLON ConditionalExpression:e3
+                              {: RESULT = new Absyn.CondExpA(e1left, e1, e2, e3); :}
+                          ;
+                        
+AssignmentExpression ::= ConditionalExpression:e
+                              {: RESULT = e; :}
+                          | UnaryExpression:e1 AssignmentOperator:op AssignmentExpression:e2
+                              {: RESULT = new Absyn.AssignExpA(e1left, op, e1, e2); :}
+                          ;
+
+Expression ::= AssignmentExpression:e
+                  {: RESULT = e; :}
+              | Expression:e1 COMMA AssignmentExpression:e2
+                  {: RESULT = new Absyn.SeqExp(0, new Absyn.ExpList(e1, new Absyn.ExpList(e2, null))); :}
+              ;
+
+AssignmentOperator ::=
+      ASSIGN       {: RESULT = Absyn.AssignExpA.ASSIGN; :}
+    | ADDASSIGN    {: RESULT = Absyn.AssignExpA.PASSIGN; :}
+    | SUBASSIGN    {: RESULT = Absyn.AssignExpA.MASSIGN; :}
+    | MULASSIGN    {: RESULT = Absyn.AssignExpA.MULASSIGN; :}
+    | DIVASSIGN    {: RESULT = Absyn.AssignExpA.DIVASSIGN; :}
+    | MODASSIGN    {: RESULT = Absyn.AssignExpA.MODASSIGN; :}
+    | BWISEANDASSIGN {: RESULT = Absyn.AssignExpA.BANDASSIGN; :}
+    | BWISEXORASSIGN {: RESULT = Absyn.AssignExpA.XORASSIGN; :}
+    | LSHIFTASSIGN   {: RESULT = Absyn.AssignExpA.LSASSIGN; :}
+    | RSHIFTASSIGN   {: RESULT = Absyn.AssignExpA.RSASSIGN; :}
+    | BWISEORASSIGN  {: RESULT = Absyn.AssignExpA.ORASSIGN; :}
+    ;
+
+
+TypeName ::=
+      INT    {: RESULT = new Absyn.TypeName("int"); :}
+    | FLOAT  {: RESULT = new Absyn.TypeName("float"); :}
+    | DOUBLE {: RESULT = new Absyn.TypeName("double"); :}
+    | CHAR   {: RESULT = new Absyn.TypeName("char"); :}
+    | LONG   {: RESULT = new Absyn.TypeName("long"); :}
+    | SHORT  {: RESULT = new Absyn.TypeName("short"); :}
+    | VOID   {: RESULT = new Absyn.TypeName("void"); :}
+    ;

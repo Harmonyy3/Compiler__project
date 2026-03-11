@@ -1,0 +1,147 @@
+package Parse;
+
+action code {: static Symbol.Symbol sym(String s) {
+	         return Symbol.Symbol.symbol(s);
+	        }
+	    :};
+
+parser code  {: 
+  Lexer lexer;
+
+  public void syntax_error(java_cup.runtime.Symbol current) {
+   report_error("Syntax error (" + current.sym + ")", current);
+  }
+
+  ErrorMsg.ErrorMsg errorMsg;
+
+  public void report_error(String message, java_cup.runtime.Symbol info) {
+      errorMsg.error(info.left, message);
+  }
+
+  public Grm(Lexer l, ErrorMsg.ErrorMsg err) {
+    this();
+    errorMsg=err;
+    lexer=l;
+  }
+:};
+
+scan with {: return lexer.nextToken(); :};
+
+
+terminal String ID, STRING_LITERAL;
+terminal Integer DECIMAL_LITERAL;
+terminal char CHAR_LITERAL;
+terminal INT, COMMA, COLON, SEMICOLON, LPAREN, RPAREN, LBRACK, RBRACK,
+	LBRACE, RBRACE, PLUS, MINUS, TIMES, DIVIDE, EQ, NEQ, LT, LE,
+	GT, GE, AND, OR, ASSIGN, IF, ELSE, WHILE, FOR,
+	DO, BREAK, FUN, VAR, VOLATILE,
+    REGISTER, CONTINUE, TYPEDEF,
+    STRUCT, STATIC, SIZEOF, RETURN, EXTERN, DOUBLE,
+    UNION, SHORT, FLOAT, CONST, VOID, LONG, GOTO, ENUM,
+    CHAR, AUTO, RSHIFTASSIGN, LSHIFTASSIGN, ELIPSES, BWISEORASSIGN,
+    BWISEXORASSIGN, RSHIFT, LSHIFT, DIVASSIGN, ARROW, SUBASSIGN, DECREMENT,
+    ADDASSIGN, INCREMENT, MULASSIGN, BWISEANDASSIGN, MODASSIGN, TILDE,
+    BWISEOR, BWISEXOR, PERIOD, BITWISEAND,
+    MODULUS, NOT, QUESTION, DEFAULT, CASE, SWITCH;
+
+non terminal Absyn.Exp          Exp;
+non terminal Absyn.Var          Var;
+
+non terminal Absyn.Stm          Statement;
+non terminal Absyn.Stm          LabeledStatement;
+non terminal Absyn.Stm          CompoundStatement;
+non terminal Absyn.Stm          ExpressionStatement;
+non terminal Absyn.Stm          SelectionStatement;
+non terminal Absyn.Stm          IterationStatement;
+non terminal Absyn.Stm          JumpStatement;
+non terminal Absyn.StmList      StatementList;
+non terminal Absyn.DecList      DeclarationList;
+non terminal Absyn.Dec          Declaration;
+non terminal Absyn.OptEXPP      OptExp;
+
+
+start with Exp;
+
+Exp ::= error:e
+	  {: RESULT = new Absyn.SeqExp(eleft, null); :}
+	| Var:v
+	  {: RESULT = new Absyn.VarExp(vleft, v); :}
+	;
+
+Var ::=   ID:n
+	  {: RESULT = new Absyn.SimpleVar(nleft, sym(n)); :}
+	;
+
+Statement ::=
+      LabeledStatement:s      {: RESULT = s; :}
+    | CompoundStatement:s     {: RESULT = s; :}
+    | ExpressionStatement:s   {: RESULT = s; :}
+    | SelectionStatement:s    {: RESULT = s; :}
+    | IterationStatement:s    {: RESULT = s; :}
+    | JumpStatement:s         {: RESULT = s; :};
+
+LabeledStatement  ::=
+  ID:n COLON Statement:s
+  {: RESULT = new Absyn.LabelStm(nleft, sym(n), s); :}
+  | CASE Exp:e COLON Statement:s
+  {: RESULT = new Absyn.CaseStm(eleft, e, s); :}
+  | DEFAULT COLON Statement:s
+  {: RESULT = new Absyn.DefaultStm(sleft, s); :};
+CompoundStatement ::=
+  LBRACE RBRACE
+  {: RESULT = new Absyn.CompoundStm(null, null); :}
+  | LBRACE DeclarationList:d RBRACE
+  {: RESULT = new Absyn.CompoundStm(d, null); :}
+  | LBRACE StatementList:s RBRACE
+  {: RESULT = new Absyn.CompoundStm(null, s); :}
+  | LBRACE DeclarationList:d  StatementList:s RBRACE
+  {: RESULT = new Absyn.CompoundStm(d, s); :};
+  
+DeclarationList ::=
+  Declaration:d
+  {: RESULT = new Absyn.DecList(d, null); :}
+  | Declaration:d DeclarationList:dl
+  {: RESULT = new Absyn.DecList(d, dl); :};
+
+StatementList ::=
+  Statement:s
+  {: RESULT = new Absyn.StmList(s, null); :}
+  | StatementList:sl  Statement:s
+  {: RESULT = new Absyn.StmList(s, sl); :};
+
+ExpressionStatement ::=
+  SEMICOLON
+  {: RESULT = new Absyn.Expstm (null); :}
+  | Exp:e SEMICOLON
+  {: RESULT = new Absyn.Expstm (e); :};
+
+SelectionStatement  ::=
+  IF LPAREN Exp:e RPAREN Statement:s
+  {: RESULT = new Absyn.SelectStm (eleft, e, s, null); :}
+  | IF LPAREN Exp:e RPAREN Statement:s ELSE Statement:s1
+  {: RESULT = new Absyn.SelectStm (eleft, e, s, s1); :}
+  | SWITCH LPAREN Exp:e RPAREN Statement:s
+  {: RESULT = new Absyn.SwitchStm (eleft, e, s); :};
+
+OptExp  ::=
+  {: RESULT = null; :}
+  | Exp:e
+  {: RESULT = e; :};
+
+IterationStatement  ::=
+  WHILE LPAREN Exp:e RPAREN Statement:s
+  {: RESULT = new Absyn.WhileStm (eleft, e, s); :}
+  | DO Statement:s  WHILE LPAREN Exp:e RPAREN SEMICOLON
+  {: RESULT = new Absyn.DoWhileStm (eleft, s, e); :}
+  | FOR LPAREN OptExp:e1 SEMICOLON OptExp:e2 SEMICOLON OptExp:e3 RPAREN Statement:s
+  {: RESULT = new Absyn.ForStm (eleft, e1, e2, e3, s); :};
+
+JumpStatement ::=
+  GOTO ID:n SEMICOLON
+  {: RESULT = new Absyn.GotoStm (gotoleft, sym(n)); :}
+  | CONTINUE SEMICOLON
+  {: RESULT = new Absyn.ContinueStm (continueleft); :}
+  | BREAK SEMICOLON
+  {: RESULT = new Absyn.BreakStm (breakleft); :}
+  | RETURN OptExp:e SEMICOLON
+  {: RESULT = new Absyn.ReturnStm (returnleft, e); :};
